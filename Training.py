@@ -1,4 +1,4 @@
-TRAIN_DATASET_PATH = r'C:\Users\yagiz\OneDrive\Masaüstü\kodlar\UnetsegmentationDeneme\unet-segmentation-project\data\train\BraTS2020_TrainingData\Training60'
+TRAIN_DATASET_PATH = 'data\train\BraTS2020_TrainingData'
 
 import os
 import numpy as np
@@ -15,55 +15,54 @@ from sklearn.metrics import f1_score, precision_score, recall_score
 from keras.models import load_model
 from PIL import Image
 
-# GPU belleği büyümesini ayarla
+
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
 
-# Varsayılan float türünü float32 olarak ayarla
+
 tf.keras.backend.set_floatx('float32')
 
-# Eğitim görüntüleri ve maskeleri için dizinleri tanımla
-train_img_dir = TRAIN_DATASET_PATH + "/input_data_60/train/images/"
-train_mask_dir = TRAIN_DATASET_PATH + "/input_data_60/train/masks/"
 
-# Doğrulama görüntüleri ve maskeleri için dizinleri tanımla
-val_img_dir = TRAIN_DATASET_PATH + "/input_data_60/val/images/"
-val_mask_dir = TRAIN_DATASET_PATH + "/input_data_60/val/masks/"
+train_img_dir = TRAIN_DATASET_PATH + "/train/images/"
+train_mask_dir = TRAIN_DATASET_PATH + "/train/masks/"
 
-# Tüm eğitim görüntülerini ve maskelerini listele
+
+val_img_dir = TRAIN_DATASET_PATH + "/val/images/"
+val_mask_dir = TRAIN_DATASET_PATH + "/val/masks/"
+
+
 train_img_list = os.listdir(train_img_dir)
 train_mask_list = os.listdir(train_mask_dir)
 
-# Tüm doğrulama görüntülerini ve maskelerini listele
+
 val_img_list = os.listdir(val_img_dir)
 val_mask_list = os.listdir(val_mask_dir)
 
-# Eğitim ve doğrulama için batch boyutunu ayarla
 batch_size = 5
 
-# Eğitim ve doğrulama için görüntü veri üreticilerini başlat
+
 train_img_datagen = imageLoader(train_img_dir, train_img_list, 
                                 train_mask_dir, train_mask_list, batch_size)
 
 val_img_datagen = imageLoader(val_img_dir, val_img_list, 
                               val_mask_dir, val_mask_list, batch_size)
 
-# Bir batch görüntü ve maske alarak üreticiyi doğrula
+
 img, msk = train_img_datagen.__next__()
 
-# Görselleştirme için batch'ten rastgele bir görüntü ve maske seç
+
 img_num = random.randint(0, img.shape[0] - 1)
 test_img = img[img_num]
 test_mask = msk[img_num]
 test_mask = np.argmax(test_mask, axis=3)
 
-# Görselleştirme için 3D görüntü ve maskeden rastgele bir dilim seç
+
 n_slice = random.randint(0, test_mask.shape[2])
 plt.figure(figsize=(12, 8))
 
-# Görüntünün farklı kanallarını ve karşılık gelen maskeyi çiz
+
 plt.subplot(221)
 plt.imshow(test_img[:, :, n_slice, 0], cmap='gray')
 plt.title('Image flair')
@@ -78,48 +77,13 @@ plt.imshow(test_mask[:, :, n_slice])
 plt.title('Mask')
 plt.show()
 
-# Eğitim için kayıp fonksiyonu, metrikler ve optimizasyon tanımla
 wt0, wt1, wt2, wt3 = np.float32(0.25), np.float32(0.25), np.float32(0.25), np.float32(0.25)
 dice_loss = sm.losses.DiceLoss(class_weights=np.array([wt0, wt1, wt2, wt3], dtype=np.float32))
 focal_loss = sm.losses.CategoricalFocalLoss()
 total_loss = dice_loss + (1 * focal_loss)
 
-# Özel Dice katsayısı metriğini tanımla
-def dice_metric(y_true, y_pred):
-    intersection = K.sum(y_true * y_pred)
-    return (2. * intersection) / (K.sum(y_true) + K.sum(y_pred) + K.epsilon())
 
-# Özel IoU metriğini tanımla
-def iou_metric(y_true, y_pred):
-    intersection = K.sum(y_true * y_pred)
-    union = K.sum(y_true) + K.sum(y_pred) - intersection
-    return intersection / (union + K.epsilon())
-
-def f1_score_metric(y_true, y_pred):
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(K.round(y_pred), 'float32')
-    tp = K.sum(y_true * y_pred)
-    fp = K.sum(y_pred) - tp
-    fn = K.sum(y_true) - tp
-    return 2 * tp / (2 * tp + fp + fn + K.epsilon())
-
-def precision_metric(y_true, y_pred):
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(K.round(y_pred), 'float32')
-    tp = K.sum(y_true * y_pred)
-    fp = K.sum(y_pred) - tp
-    return tp / (tp + fp + K.epsilon())
-
-def recall_metric(y_true, y_pred):
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(K.round(y_pred), 'float32')
-    tp = K.sum(y_true * y_pred)
-    fn = K.sum(y_true) - tp
-    return tp / (tp + fn + K.epsilon())
-
-# Tüm metrikleri hesaplayan fonksiyon
-def calculate_all_metrics(y_true, y_pred):
-    """Tüm segmentasyon metriklerini hesapla"""
+def calculate_all_metrics(y_true, y_pred)
     y_true_flat = y_true.flatten()
     y_pred_flat = y_pred.flatten()
     
@@ -127,17 +91,17 @@ def calculate_all_metrics(y_true, y_pred):
     precision = precision_score(y_true_flat, y_pred_flat, average='weighted', zero_division=0)
     sensitivity = recall_score(y_true_flat, y_pred_flat, average='weighted', zero_division=0)
     
-    # Özgüllüğü hesapla
+
     tn = np.sum((y_true_flat == 0) & (y_pred_flat == 0))
     fp = np.sum((y_true_flat == 0) & (y_pred_flat == 1))
     specificity = tn / (tn + fp + 1e-7)
     
-    # IoU'yu hesapla
+    
     intersection = np.sum((y_true_flat == 1) & (y_pred_flat == 1))
     union = np.sum((y_true_flat == 1) | (y_pred_flat == 1))
     iou = intersection / (union + 1e-7)
     
-    # Dice katsayısını hesapla
+    
     dice = 2 * intersection / (np.sum(y_true_flat) + np.sum(y_pred_flat) + 1e-7)
     
     return {
@@ -149,7 +113,7 @@ def calculate_all_metrics(y_true, y_pred):
         'dice': dice
     }
 
-# Kullanılacak metrikler
+
 metrics = [
     'accuracy',
     sm.metrics.IOUScore(threshold=0.5),
@@ -161,7 +125,7 @@ metrics = [
     dice_metric
 ]
 
-# Eğitim ve doğrulama metriklerini çizen fonksiyon
+
 def plot_metrics(history):
     """Eğitim ve doğrulama metriklerini çiz"""
     for metric_name in history.keys():
@@ -180,10 +144,10 @@ def plot_precision_recall_f1(history):
     if 'precision_metric' in history and 'recall_metric' in history and 'f1_score_metric' in history:
         plt.figure(figsize=(10, 6))
         
-        # Precision vs Recall plot
+      
         plt.plot(history['recall_metric'], history['precision_metric'], 'b', label='Precision vs Recall')
         
-        # F1 Score vs Recall plot
+       
         plt.plot(history['recall_metric'], history['f1_score_metric'], 'g', label='F1 Score vs Recall')
         
         plt.title('Precision and F1 Score vs Recall')
@@ -195,24 +159,24 @@ def plot_precision_recall_f1(history):
 LR = 0.0001
 optim = keras.optimizers.Adam(LR)
 
-# Eğitim adımlarını ve doğrulama adımlarını hesapla
+
 steps_per_epoch = len(train_img_list) // batch_size
 val_steps_per_epoch = len(val_img_list) // batch_size
 
 from Unet_model import simple_unet_model
 
-# U-Net modelini başlat
+
 model = simple_unet_model(IMG_HEIGHT=128, 
                           IMG_WIDTH=128, 
                           IMG_DEPTH=128, 
                           IMG_CHANNELS=3, 
                           num_classes=4)
 
-# Modeli tanımlanan optimizer, kayıp ve metriklerle derle
+
 model.compile(optimizer=optim, loss=total_loss, metrics=metrics)
 print(model.summary())
 
-# Modeli eğit
+
 epochs = 1
 history = model.fit(train_img_datagen,
                     steps_per_epoch=steps_per_epoch,
@@ -221,17 +185,16 @@ history = model.fit(train_img_datagen,
                     validation_data=val_img_datagen,
                     validation_steps=val_steps_per_epoch)
 
-# Eğitilmiş modeli kaydet
 model_filename = f'saved_models/brats_3d_{epochs}epochs_simple_unet_weighted_dice.hdf5'
 model.save(model_filename)
 
-# Tüm metrikleri çiz
+
 plot_metrics(history.history)
 
-# Precision, Recall ve F1 Score grafiğini çiz
+
 plot_precision_recall_f1(history.history)
 
-# Tahmin veya eğitime devam etmek için modeli yükle
+
 my_model = load_model(model_filename, 
                       custom_objects={'dice_loss_plus_1focal_loss': total_loss,
                                       'iou_score': sm.metrics.IOUScore(threshold=0.5), 
@@ -243,36 +206,36 @@ my_model = load_model(model_filename,
                                       'recall_metric': recall_metric})
 my_model.compile(optimizer=keras.optimizers.Adam(LR), loss=total_loss, metrics=metrics)
 
-# Test veri setinden bir batch görüntü üzerinde IoU'yu doğrula
+
 test_img_datagen = imageLoader(val_img_dir, val_img_list, 
                                val_mask_dir, val_mask_list, batch_size)
 
-# Bir batch test görüntü ve maske al
+
 test_image_batch, test_mask_batch = test_img_datagen.__next__()
 
-# Test batch üzerinde tahmin yap
+
 test_mask_batch_argmax = np.argmax(test_mask_batch, axis=4)
 test_pred_batch = my_model.predict(test_image_batch)
 test_pred_batch_argmax = np.argmax(test_pred_batch, axis=4)
 
-# Ortalama IoU'yu hesapla
+
 n_classes = 4
 IOU_keras = MeanIoU(num_classes=n_classes)
 IOU_keras.update_state(test_pred_batch_argmax, test_mask_batch_argmax)
 print("Mean IoU =", IOU_keras.result().numpy())
 
-# Tek bir test görüntüsü üzerinde tahmin yap
+
 img_num = 42
-test_img = np.load(TRAIN_DATASET_PATH + "/input_data_60/val/images/image_" + str(img_num) + ".npy")
-test_mask = np.load(TRAIN_DATASET_PATH + "/input_data_60/val/masks/mask_" + str(img_num) + ".npy")
+test_img = np.load(TRAIN_DATASET_PATH + "/val/images/image_" + str(img_num) + ".npy")
+test_mask = np.load(TRAIN_DATASET_PATH + "/val/masks/mask_" + str(img_num) + ".npy")
 test_mask_argmax = np.argmax(test_mask, axis=3)
 
-# Tahmin için test görüntüsünü hazırla
+
 test_img_input = np.expand_dims(test_img, axis=0)
 test_prediction = my_model.predict(test_img_input)
 test_prediction_argmax = np.argmax(test_prediction, axis=4)[0, :, :, :]
 
-# Tüm metrikleri çiz
+
 for metric in metrics:
     plot_metrics(history.history)
 
@@ -289,7 +252,7 @@ plt.title('Prediction on test image')
 plt.imshow(test_prediction_argmax[:, :, n_slice])
 plt.show()
 
-# Function to preprocess image
+
 def preprocess_image(image_path, target_size):
     if image_path.endswith('.npy'):
         img = np.load(image_path)
@@ -298,21 +261,21 @@ def preprocess_image(image_path, target_size):
         img = img.resize(target_size)
         img = np.array(img)
     
-    img = img.astype(np.float32) / 255.0  # Normalize to [0, 1]
-    img = np.expand_dims(img, axis=0)  # Add batch dimension
+    img = img.astype(np.float32) / 255.0 
+    img = np.expand_dims(img, axis=0)  
     return img
 
-# Function to predict and visualize
+
 def predict_and_visualize(model, image_path, mask_path=None, target_size=(128, 128, 128)):
-    # Preprocess the image
+
     img = preprocess_image(image_path, target_size)
     
-    # Make prediction
+    
     prediction = model.predict(img)
     prediction_argmax = np.argmax(prediction, axis=4)[0, :, :, :]
     
-    # Visualize the results
-    n_slice = prediction_argmax.shape[2] // 2  # Select middle slice for visualization
+
+    n_slice = prediction_argmax.shape[2] // 2  
     plt.figure(figsize=(12, 6))
     
     plt.subplot(121)
@@ -325,7 +288,7 @@ def predict_and_visualize(model, image_path, mask_path=None, target_size=(128, 1
     
     plt.show()
     
-    # If mask is provided, calculate and print metrics
+   
     if mask_path:
         mask = preprocess_image(mask_path, target_size)
         mask_argmax = np.argmax(mask, axis=4)[0, :, :, :]
